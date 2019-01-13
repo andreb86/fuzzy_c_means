@@ -15,15 +15,15 @@ int main(int argc, char **argv) {
 "\n<centroids> is the number of centroids which the dataset is divided into");
     // Initialise MPI session and relevant variables
     int nodes, rank, c_tag = 1, d_tag = 2;
-    unsigned long int batch_size, centroid_size;
-    double *d_buf, *c_buf;
+    unsigned int dim, ndat, ncen; // dimension of the problem, number of datapoints and number of centroids
+    double *d_buf = nullptr, *c_buf = nullptr;
     MPI_Init(&argc, &argv);
     MPI_Status stat;
     MPI_Comm_size(MPI_COMM_WORLD, &nodes);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     // Initialise with the CLI arguments
-    int n_centroids = std::stoi(argv[2]); //number of centroids for the problem
+    ncen = std::stoi(argv[2]); //number of centroids for the problem
 
     MPI_Barrier(MPI_COMM_WORLD);
     // Load data points in the root process
@@ -37,54 +37,58 @@ int main(int argc, char **argv) {
         }
 
         if (argc != 3) {
-            std::cout << "Unexpected number of arguments provided" <<std::endl;
+            std::cerr << "Unexpected number of arguments provided" << std::endl;
             std::cout << help << std::endl;
             MPI_Abort(MPI_COMM_WORLD, argc);
             exit(argc);
         }
+        // read the data from the root process
+        Data d(argv[1]);
+        d.init_centroids(ncen);
+        ndat = d.get_size();
+        dim = d.get_dim();
+        c_buf = d.centroids();
     }
-    Data d(argv[1]);
-    d.init_centroids(n_centroids);
-    unsigned long int n = d.get_size();
-    unsigned long int dim = d.get_dim();
-    batch_size = (n / nodes + 1) * dim;
-    centroid_size = n_centroids * dim;
-    d_buf = new double[batch_size];
-    c_buf = new double[centroid_size];
+
+//    MPI_Barrier(MPI_COMM_WORLD);
+//    std::cout << rank << ": " << ncen << std::endl;
 
     int err = MPI_Bcast(
-            d.centroids(),
-            centroid_size,
-            MPI_DOUBLE,
+            &dim,
+            1,
+            MPI_INT,
             ROOT,
             MPI_COMM_WORLD);
-
     if (err != MPI_SUCCESS) {
-        std::cerr << "Unable to send centroids!" << std::endl;
+        std::cerr << "Unable to send problem dimension!" << std::endl;
         std::cerr << err << std::endl;
         MPI_Abort(MPI_COMM_WORLD, err);
         exit(err);
     }
 
-    std::cout << rank << ": Receiving the centroids." << std::endl;
-    err = MPI_Recv(
-            c_buf,
-            centroid_size,
-            MPI_DOUBLE,
-            MPI_ANY_SOURCE,
-            MPI_ANY_TAG,
-            MPI_COMM_WORLD,
-            &stat);
+//    std::cout << rank << ": " << dim << std::endl;
+
+    err = MPI_Bcast(
+            &ndat,
+            1,
+            MPI_INT,
+            ROOT,
+            MPI_COMM_WORLD);
     if (err != MPI_SUCCESS) {
-        std::cerr << "Unable to receive the centroids." << std::endl;
+        std::cerr << "Unable to send problem size!" << std::endl;
+        std::cerr << err << std::endl;
         MPI_Abort(MPI_COMM_WORLD, err);
         exit(err);
     }
 
+    // Broadcast the centroids to all the processes
+    MPI_Bcast(c_buf, ncen * dim, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+    for (int k = 0; k < ncen * dim; ++k) {
+        std::cout << rank << ": " << c_buf[k] << std::endl;
+    }
 
-
-    delete[] d_buf;
-    delete[] c_buf;
+    int batch = ndat * dim / nodes
+    MPI_Scatter(, );
 
     MPI_Finalize();
     return 0;

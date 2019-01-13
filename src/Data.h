@@ -53,15 +53,6 @@ public:
         std::cout << "The total size of the problem is: " << size << std::endl;
     }
 
-    // print the data to stdout
-    void print() {
-        for (int i = 0; i < ndat; ++i){
-            for (int j = 0; j < ndim; ++j)
-                std::cout << x[i * ndim + j] << "\t";
-            std::cout << std::endl;
-        }
-    }
-
     // generate the centroids
     void init_centroids(int n) {
         std::random_device rd;
@@ -94,6 +85,16 @@ public:
     double *centroids() {
         return y.data();
     }
+
+    // print the data to stdout
+    void print() {
+        for (int i = 0; i < ndat; ++i){
+            for (int j = 0; j < ndim; ++j)
+                std::cout << x[i * ndim + j] << "\t";
+            std::cout << std::endl;
+        }
+    }
+
 };
 
 #endif
