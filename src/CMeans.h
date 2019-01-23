@@ -16,14 +16,13 @@
 
 class CMeans {
 public:
+    const int b, c, m; // number of datapoints, number of centroids and space dimension
+    int nthreads = omp_get_num_threads(); // number of threads
     const double f, e; // fuzzification parameter and tolerance
 
     // points, centroids coordinates, distances and the membership vector
     double *x, *y, *d, *u_old, *u_new, *u_sum;
 
-    // number of datapoints, number of centroids and space dimension
-    const int b, c, m;
-    int nthreads = omp_get_num_threads();
     // initialise the value of the batch size b, number of centroids c and dimension of the problem
     CMeans(const unsigned bb, const unsigned mm, const unsigned cc, const double ff, const double ee):
     b(bb), c(cc), m(mm), f(ff), e(ee) {
@@ -37,7 +36,7 @@ public:
         u_new = static_cast<double *>(_mm_malloc(sizeof(double) * cc * bb, CACHELINE));
         u_sum = static_cast<double *>(_mm_malloc(sizeof(double) * cc *  1, CACHELINE));
 
-        if (x == NULL || y == NULL || d == NULL || u_old == NULL || u_new == NULL || u_sum == NULL) {
+        if (x == nullptr || y == nullptr || d == nullptr || u_old == nullptr || u_new == nullptr || u_sum == nullptr) {
             std::cerr << "Unable to allocate arrays." << std::endl;
             _mm_free(x);
             _mm_free(y);
@@ -49,7 +48,7 @@ public:
         }
 
         // initialise the membership vectors
-#pragma vector aligned
+#pragma omp simd
         for (int k = 0; k < b * c; ++k) {
             u_new[k] = u_old[k] = 1 / c;
         }
@@ -94,7 +93,7 @@ public:
         }
     }
 
-    void sums(const unsigned int block) {
+    void usums(const unsigned int block) {
 #pragma omp parallel for schedule(static) num_threads(nthreads)
         for (int ii = 0; ii < b; ii += block) {
             int ib = ii + block;
@@ -109,6 +108,7 @@ public:
 
     bool check(const unsigned int block) {
         double err = 0;
+        bool res = false;
 #pragma omp parallel for schedule(static) num_threads(nthreads)
         for (int ii = 0; ii < b; ii += block) {
             int ib = ii + block;
@@ -116,12 +116,12 @@ public:
                 for (int i = ii; i < std::min(ib, b); ++i) {
                     err += std::pow(u_new[j * b + i] - u_old[j * b + i], 2);
                     if (err >= e) {
-                        return true;
+                        res = true;
                     }
                 }
             }
         }
-        return false;
+        return res;
     }
 
     void update() {
