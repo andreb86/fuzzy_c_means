@@ -28,7 +28,8 @@ public:
     b(bb), c(cc), m(mm), f(ff), e(ee) {
 
         // Allocate aligned memory
-        std::cout << "Allocating memory for data arrays." << std::endl;
+//        std::cout.flush();
+//        std::cout << "Allocating: " << bb << " points" << std::endl;
         x     = static_cast<double *>(_mm_malloc(sizeof(double) * bb * mm, CACHELINE));
         y     = static_cast<double *>(_mm_malloc(sizeof(double) * cc * mm, CACHELINE));
         d     = static_cast<double *>(_mm_malloc(sizeof(double) * bb * cc, CACHELINE));
@@ -129,6 +130,7 @@ public:
     }
 
     ~CMeans() {
+        std::cout.flush();
         std::cout << "Freeing up memory..." << std::endl;
         _mm_free(x);
         _mm_free(y);
@@ -136,6 +138,7 @@ public:
         _mm_free(u_old);
         _mm_free(u_new);
         _mm_free(u_sum);
+        std::cout.flush();
         std::cout << "Bye!" << std::endl;
     }
 };

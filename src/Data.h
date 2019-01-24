@@ -24,7 +24,8 @@ protected:
     unsigned long size;
 
 public:
-    Data(const std::string filename) {
+    Data(const std::string &filename) {
+        std::cout << "======================= I N P U T ============================" << std::endl;
         std::cout << "Reading file: " << filename << std::endl;
 
         // read input dataset into file stream
