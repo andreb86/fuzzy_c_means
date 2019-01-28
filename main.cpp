@@ -2,6 +2,7 @@
 #include "src/Data.h"
 #include "mpich/mpi.h"
 #include <iostream>
+#include <mm_malloc.h>
 #include <cstring>
 
 #define ROOT 0
@@ -65,8 +66,6 @@ int main(int argc, char **argv) {
         n = d->get_size();
         m = d->get_dim();
         d->init_centroids(c);
-        y = d->centroids();
-
 
         // Calculate the dimension of the buffer that will hold the scattered dataset
         b = n / nodes;
@@ -88,6 +87,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Broadcast the feature space dimension
     int err = MPI_Bcast(&m, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
     if (err != MPI_SUCCESS) {
         std::cerr << "Unable to send space dimension!" << std::endl;
@@ -96,6 +96,13 @@ int main(int argc, char **argv) {
         exit(err);
     }
 
+    // Initialise the vector of the centroids
+    y = static_cast<double *>(_mm_malloc(sizeof(double) * c * m, CACHELINE));
+    if (rank == ROOT) {
+        std::memcpy(y, d->centroids(), c * m);
+    }
+
+    // Broadcast the dataset size
     err = MPI_Bcast(&n, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
     if (err != MPI_SUCCESS) {
         std::cerr << "Unable to send problem size!" << std::endl;
@@ -104,6 +111,7 @@ int main(int argc, char **argv) {
         exit(err);
     }
 
+    // Broadcast the random centroids
     err = MPI_Bcast(y, c * m, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
     if (err != MPI_SUCCESS) {
         std::cerr << "Unable to send centroids!" << std::endl;
@@ -111,6 +119,11 @@ int main(int argc, char **argv) {
         MPI_Abort(MPI_COMM_WORLD, err);
         exit(err);
     }
+
+    // Test print
+    MPI_Barrier(MPI_COMM_WORLD);
+    std::cout.flush();
+    std::cout << rank << ": (" << c << ", " << n << ")" << std::endl;
 
     // Calculate the number of data points to be sent to each process
     b = n / nodes;
@@ -135,26 +148,38 @@ int main(int argc, char **argv) {
     std::memcpy(fcm.y, y, c * m * sizeof(double));
     double diff;
 
-//    do {
-//        fcm.distances(block);
-//        fcm.weights(block);
-//        diff = fcm.check(block);
-//        fcm.umulx();
-//        MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-//        MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-//        for (int i = 0; i < c; ++i) {
-//            for (int j = 0; j < m; ++j) {
-//                y[i * m + j] /= usum[i];
-//            }
-//        }
-//        std::memcpy(fcm.y, y, c * m * sizeof(double));
-//    } while (diff > e);
+    do {
+        fcm.distances(block);
+        fcm.weights(block);
+        diff = fcm.check(block);
+        fcm.umulx(block);
+        MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        for (int i = 0; i < c; ++i) {
+            for (int j = 0; j < m; ++j) {
+                y[i * m + j] /= usum[i];
+            }
+        }
+        std::memcpy(fcm.y, y, c * m * sizeof(double));
+    } while (diff > e);
+
+    if (rank == ROOT) {
+        std::cout.flush();
+        for (int i = 0; i < c; ++i) {
+            for (int k = 0; k < m; ++k) {
+                if(k % m == 0) std::cout << std::endl;
+                std::cout << fcm.y[i * m + k];
+            }
+        }
+
+    }
 
 
 
     // Cleanup;
     if (rank == ROOT)
         delete [] d;
+    _mm_free(y);
     MPI_Finalize();
     return 0;
 }
