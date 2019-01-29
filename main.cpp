@@ -11,13 +11,13 @@
 
 int main(int argc, char **argv) {
     std::string help(
-"cmeans <input file> <centroids> <fuzzyfication> <tolerance>"
+"cmeans <input file> <centroids> <fuzzyfication> <tolerance> <block>"
 "\n\nwhere:"
-"\n<input file> is the input file containing the dataset"
-"\n<centroids> is the number of centroids which the dataset is divided into"
-"\n<fuzzyfication> fuzzyfication parameter"
-"\n<tolerance> maximum allowable error on the membership vectors"
-"\n<block> block size");
+"\n<input file>\tis the input file containing the dataset"
+"\n<centroids>\tis the number of centroids which the dataset is divided into"
+"\n<fuzzyfication>\tfuzzyfication parameter"
+"\n<tolerance>\tmaximum allowable error on the membership vectors"
+"\n<block>\tblock size");
     // Initialise MPI session and relevant variables
     int nodes, rank;
     unsigned int m, n, c, b, r, block; // feature space, n datapoints, c centroids, batch size, remainder and block
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
             } else {
                 displs[i] = displs[i - 1] + counts[i - 1];
             }
-            std::cout << "Process: " << i << " N. elements: " << counts[i] << " Offset: " << displs[i] << std::endl;
+            std::printf("Process: %d N. elements: %d Offset: %d\n", i, counts[i], displs[i]);
         }
     }
 
@@ -96,8 +96,9 @@ int main(int argc, char **argv) {
         exit(err);
     }
 
-    // Initialise the vector of the centroids
-    y = static_cast<double *>(_mm_malloc(sizeof(double) * c * m, CACHELINE));
+    // Initialise the vector of the centroids and the u sums
+    y    = static_cast<double *>(_mm_malloc(sizeof(double) * c * m, CACHELINE));
+    usum = static_cast<double *>(_mm_malloc(sizeof(double) * c * 1, CACHELINE));
     if (rank == ROOT) {
         std::memcpy(y, d->centroids(), c * m);
     }
@@ -114,16 +115,14 @@ int main(int argc, char **argv) {
     // Broadcast the random centroids
     err = MPI_Bcast(y, c * m, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
     if (err != MPI_SUCCESS) {
-        std::cerr << "Unable to send centroids!" << std::endl;
-        std::cerr << err << std::endl;
+        std::printf("Unable to send centroids: %d\n", err);
         MPI_Abort(MPI_COMM_WORLD, err);
         exit(err);
     }
 
     // Test print
     MPI_Barrier(MPI_COMM_WORLD);
-    std::cout.flush();
-    std::cout << rank << ": (" << c << ", " << n << ")" << std::endl;
+    std::printf("Rank: %d, y0 = (%f, %f)", rank, y[0], y[1]);
 
     // Calculate the number of data points to be sent to each process
     b = n / nodes;
@@ -135,51 +134,55 @@ int main(int argc, char **argv) {
     // Create the clustering class for each process
     CMeans fcm = CMeans(b, m, c, f, e);
     std::cout.flush();
-    err = MPI_Scatterv(d->dataset(), counts, displs, MPI_DOUBLE, fcm.x, b * m, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+    if (rank == ROOT) {
+        err = MPI_Scatterv(d->dataset(), counts, displs, MPI_DOUBLE, fcm.x, b * m, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+    } else {
+        err = MPI_Scatterv(NULL, NULL, NULL, MPI_DOUBLE, fcm.x, b * m, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+    }
     if (err != MPI_SUCCESS) {
-        std::cerr.flush();
-        std::cerr << "Unable to scatter data to processes!" << std::endl;
-        std::cerr << err << std::endl;
+        std::printf("Unable to send data batch: %d\n", err);
         MPI_Abort(MPI_COMM_WORLD, err);
         exit(err);
     }
+
+    std::printf("Process No. %d -> Beginning of dataset (%f, %f)\n", rank, fcm.x[0], fcm.x[1]);
 
     // Copy the centroids into the aligned buffer
     std::memcpy(fcm.y, y, c * m * sizeof(double));
     double diff;
 
-    do {
-        fcm.distances(block);
-        fcm.weights(block);
-        diff = fcm.check(block);
-        fcm.umulx(block);
-        MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        for (int i = 0; i < c; ++i) {
-            for (int j = 0; j < m; ++j) {
-                y[i * m + j] /= usum[i];
-            }
-        }
-        std::memcpy(fcm.y, y, c * m * sizeof(double));
-    } while (diff > e);
-
-    if (rank == ROOT) {
-        std::cout.flush();
-        for (int i = 0; i < c; ++i) {
-            for (int k = 0; k < m; ++k) {
-                if(k % m == 0) std::cout << std::endl;
-                std::cout << fcm.y[i * m + k];
-            }
-        }
-
-    }
+//    do {
+//        fcm.distances(block);
+//        fcm.weights(block);
+//        diff = fcm.check(block);
+//        fcm.umulx(block);
+//        MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//        MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//        for (int i = 0; i < c; ++i) {
+//            for (int j = 0; j < m; ++j) {
+//                y[i * m + j] /= usum[i];
+//            }
+//        }
+//        std::memcpy(fcm.y, y, c * m * sizeof(double));
+//    } while (diff > e);
+//
+//    if (rank == ROOT) {
+//        std::cout.flush();
+//        for (int i = 0; i < c; ++i) {
+//            for (int k = 0; k < m; ++k) {
+//                if(k % m == 0) std::cout << std::endl;
+//                std::cout << fcm.y[i * m + k] << "\t";
+//            }
+//        }
+//    }
 
 
 
     // Cleanup;
     if (rank == ROOT)
-        delete [] d;
+        delete d;
     _mm_free(y);
+    _mm_free(usum);
     MPI_Finalize();
     return 0;
 }

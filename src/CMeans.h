@@ -32,8 +32,8 @@ public:
     b(bb), c(cc), m(mm), f(ff), e(ee) {
 
         // Allocate aligned memory
-//        std::cout.flush();
-//        std::cout << "Allocating: " << bb << " points" << std::endl;
+
+        std::printf("Allocating: %d points\n", b);
         x     = static_cast<double *>(_mm_malloc(sizeof(double) * bb * mm, CACHELINE));
         y     = static_cast<double *>(_mm_malloc(sizeof(double) * cc * mm, CACHELINE));
         d     = static_cast<double *>(_mm_malloc(sizeof(double) * bb * cc, CACHELINE));
@@ -44,7 +44,7 @@ public:
         u_sum = static_cast<double *>(_mm_malloc(sizeof(double) * cc *  1, CACHELINE));
 
         if (x == nullptr || y == nullptr || d == nullptr || u_old == nullptr || u_new == nullptr || u_sum == nullptr) {
-            std::cerr << "Unable to allocate arrays." << std::endl;
+            std::perror("Unable to allocate arrays\n");
             _mm_free(x);
             _mm_free(y);
             _mm_free(d);
@@ -108,16 +108,16 @@ public:
 
     double check(const unsigned int block) {
         double err = 0, tmp;
-#pragma omp parallel for schedule(static) private(tmp) num_threads(nthreads) reduction(+:err)
+#pragma omp parallel for schedule(static) private(tmp) num_threads(nthreads) shared(err)
         for (int ii = 0; ii < b; ii += block) {
-            tmp = 0;
             int ib = ii + block;
             for (int j = 0; j < c; ++j) {
                 for (int i = ii; i < std::min(ib, b); ++i) {
-                    tmp += std::pow(u_new[j * b + i] - u_old[j * b + i], 2);
+                    tmp = std::abs(u_new[j * b + i] - u_old[j * b + i]);
+                    if (tmp > err)
+                        err = tmp;
                 }
             }
-            err += tmp;
         }
         err = std::sqrt(err);
         if (err > e) {
