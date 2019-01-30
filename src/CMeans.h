@@ -12,13 +12,13 @@
 #include <algorithm>
 #include <omp.h>
 #include <mm_malloc.h>
-//#include </home/andrea/amd/blis/include/blis/cblas.h>
 
 class CMeans {
 public:
     const int b, c, m; // number of datapoints, number of centroids and space dimension
     int nthreads = omp_get_num_threads(); // number of threads
-    const double f, e; // fuzzification parameter and tolerance
+    const double f, tol; // fuzzification parameter and tolerance
+    double err; //
 
     // points, centroids coordinates, distances and the membership vector
     double *x, *y, *d, *d_sum, *u_old, *u_new, *u_pow, *u_sum;
@@ -29,7 +29,7 @@ public:
             const unsigned cc,
             const double ff,
             const double ee):
-    b(bb), c(cc), m(mm), f(ff), e(ee) {
+    b(bb), c(cc), m(mm), f(ff), tol(ee), err(0) {
 
         // Allocate aligned memory
 
@@ -55,20 +55,11 @@ public:
             _mm_free(u_sum);
             exit(1);
         }
-
-        // initialise the membership vectors
-#pragma omp simd
-        for (int k = 0; k < b * c; ++k) {
-            u_new[k] = 1;
-            u_pow[k] = 1;
-            u_old[k] = 1 / c;
-        }
     }
 
     // calculate the square of the distances
     void distances(const unsigned int block_size) {
-        double tmp[m] __attribute__((aligned (CACHELINE)));
-        double tmp_d;
+        double tmp[m] __attribute__((aligned (CACHELINE))), tmp_d;
 #pragma omp parallel for schedule(static) private(tmp, tmp_d) num_threads(nthreads)
         for (int ii = 0; ii < b; ii += block_size) {
             int ib = ii + block_size;
@@ -106,8 +97,9 @@ public:
         }
     }
 
-    double check(const unsigned int block) {
-        double err = 0, tmp;
+    void check(const unsigned int block) {
+        double tmp;
+
 #pragma omp parallel for schedule(static) private(tmp) num_threads(nthreads) shared(err)
         for (int ii = 0; ii < b; ii += block) {
             int ib = ii + block;
@@ -115,22 +107,21 @@ public:
                 for (int i = ii; i < std::min(ib, b); ++i) {
                     tmp = std::abs(u_new[j * b + i] - u_old[j * b + i]);
                     if (tmp > err)
+#pragma omp atomic write
                         err = tmp;
                 }
             }
         }
-        err = std::sqrt(err);
-        if (err > e) {
+        if (err > tol) {
             // Swap the old and new values of the membership vectors
-            double *tmp_p = u_new;
-            u_old = u_new;
-            u_new = tmp_p;
+            std::swap(u_old, u_new);
+//            double *tmp_p = u_new;
+//            u_old = u_new;
+//            u_new = tmp_p;
         }
-        return err;
     }
 
     void umulx(const unsigned int block) {
-//        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, c, m, b, 1, u_pow, b, x, m, 0, y, m);
         for (int ii = 0; ii < c; ii += block) {
             int ib = ii + block;
             for (int kk = 0; kk < b; kk += block) {
