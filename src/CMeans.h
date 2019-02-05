@@ -33,7 +33,7 @@ public:
 
         // Allocate aligned memory
 
-        std::printf("Allocating: %d points\n", b);
+        std::printf("\nAllocating: %d points\n", b);
         x     = static_cast<double *>(_mm_malloc(sizeof(double) * bb * mm, CACHELINE));
         y     = static_cast<double *>(_mm_malloc(sizeof(double) * cc * mm, CACHELINE));
         d     = static_cast<double *>(_mm_malloc(sizeof(double) * bb * cc, CACHELINE));
@@ -141,7 +141,7 @@ public:
 
     ~CMeans() {
         std::cout.flush();
-        std::cout << "Freeing up memory..." << std::endl;
+        std::printf("Freeing up memory...");
         _mm_free(x);
         _mm_free(y);
         _mm_free(d);

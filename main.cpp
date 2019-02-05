@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
         // Calculate the dimension of the buffer that will hold the scattered dataset
         b = n / nodes;
         r = n % nodes;
-        std::cout << "================= P A R T I T I O N I N G ====================" << std::endl;
+        std::cout << std::endl << "================= P A R T I T I O N I N G ====================" << std::endl;
         for (int i = 0; i < nodes; ++i) {
             if (i < r) {
                 counts[i] = (b + 1) * m;
@@ -121,7 +121,6 @@ int main(int argc, char **argv) {
 
     // Test print
     MPI_Barrier(MPI_COMM_WORLD);
-    std::printf("Rank: %d, y0 = (%f, %f)", rank, y[0], y[1]);
 
     // Calculate the number of data points to be sent to each process
     b = n / nodes;
@@ -148,61 +147,65 @@ int main(int argc, char **argv) {
 
     // Copy the centroids into the aligned buffer
     std::memcpy(fcm.y, y, c * m * sizeof(double));
-    double diff;
+    double diff = 100;
     int counter = 0;
 
-    do {
-        fcm.distances(block);
-        fcm.weights(block);
-        fcm.check(block);
+    fcm.distances(block);
+    fcm.weights(block);
+    std::cout.flush();
+    std::printf("\nDistance of the first point: %e", fcm.d[0]);
+
+//    do {
+//        fcm.distances(block);
+//        fcm.weights(block);
+//        fcm.check(block);
 
         // Find the maximum error among all of the processes
-        err = MPI_Allreduce(&fcm.err, &diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-        if (err != MPI_SUCCESS){
-            std::printf("Error while reducing the error: %d", err);
-            MPI_Abort(MPI_COMM_WORLD, err);
-            exit(err);
-        }
-        fcm.umulx(block);
+//        err = MPI_Allreduce(&fcm.err, &diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+//        if (err != MPI_SUCCESS){
+//            std::printf("Error while reducing the error: %d", err);
+//            MPI_Abort(MPI_COMM_WORLD, err);
+//            exit(err);
+//        }
+//        fcm.umulx(block);
 
         // Reduce the centroids
-        err = MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        if (err != MPI_SUCCESS) {
-            std::printf("Error while reducing the centroids: %d", err);
-            MPI_Abort(MPI_COMM_WORLD, err);
-            exit(err);
-        }
+//        err = MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//        if (err != MPI_SUCCESS) {
+//            std::printf("Error while reducing the centroids: %d", err);
+//            MPI_Abort(MPI_COMM_WORLD, err);
+//            exit(err);
+//        }
 
         // Reduce the sum of u
-        err = MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        if (err != MPI_SUCCESS) {
-            std::printf("Error while reducing the sums of u: %d", err);
-            MPI_Abort(MPI_COMM_WORLD, err);
-            exit(err);
-        }
+//        err = MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//        if (err != MPI_SUCCESS) {
+//            std::printf("Error while reducing the sums of u: %d", err);
+//            MPI_Abort(MPI_COMM_WORLD, err);
+//            exit(err);
+//        }
 
         // Calculate the updated centroids and copy them back into
-#pragma omp parallel for num_threads(c)
-        for (int i = 0; i < c; ++i) {
-            for (int j = 0; j < m; ++j) {
-                y[i * m + j] /= usum[i];
-            }
-        }
-        std::memcpy(fcm.y, y, c * m * sizeof(double));
-        counter++;
-    } while (diff > e & counter < 10);
+//#pragma omp parallel for num_threads(c)
+//        for (int i = 0; i < c; ++i) {
+//            for (int j = 0; j < m; ++j) {
+//                y[i * m + j] /= usum[i];
+//            }
+//        }
+//        std::memcpy(fcm.y, y, c * m * sizeof(double));
+//        counter++;
+//    } while (diff > e & counter < 1);
 
     if (rank == ROOT) {
         std::cout.flush();
+        std::cout << std::endl << "================= R E S U L T S ====================" << std::endl;
         for (int i = 0; i < c; ++i) {
             for (int k = 0; k < m; ++k) {
                 if(k % m == 0) std::cout << std::endl;
-                std::cout << fcm.y[i * m + k] << "\t";
+                std::printf("%.8f,\t", fcm.y[i * m + k]);
             }
         }
     }
-
-
 
     // Cleanup;
     if (rank == ROOT)

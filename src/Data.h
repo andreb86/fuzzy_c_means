@@ -59,11 +59,12 @@ public:
         std::random_device rd;
         std::mt19937_64 eng(rd());
         std::uniform_int_distribution<> dist(0, ndat - 1);
-        std::cout << "Selecting " << n << " random centroids from list:" <<std::endl;
+        std::cout.flush();
+        std::printf("Selecting %d random centroids from list:", n);
         for (int i = 0; i < n; ++i) {
             int k = dist(eng);
             for (int j = 0; j < ndim; ++j) {
-                std::cout << x[k * ndim + j] << "\t";
+                std::printf("%.8f\t", x[k * ndim + j]);
                 y.push_back(x[k * ndim + j]);
             }
             std::cout << std::endl;
