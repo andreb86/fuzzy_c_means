@@ -42,7 +42,7 @@ class FCM(object):
         self.usum = self.unew.sum(0)
 
     def check(self):
-        err = self.unew - self.uold
+        err = np.abs(self.unew - self.uold)
         return np.max(err)
 
     def update(self):

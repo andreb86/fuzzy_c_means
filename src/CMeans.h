@@ -99,7 +99,6 @@ public:
 
     void check(const unsigned int block) {
         double tmp;
-
 #pragma omp parallel for schedule(static) private(tmp) num_threads(nthreads) shared(err)
         for (int ii = 0; ii < b; ii += block) {
             int ib = ii + block;
@@ -122,6 +121,7 @@ public:
     }
 
     void umulx(const unsigned int block) {
+#pragma omp parallel for schedule(static) num_threads(nthreads)
         for (int ii = 0; ii < c; ii += block) {
             int ib = ii + block;
             for (int kk = 0; kk < b; kk += block) {
@@ -132,7 +132,7 @@ public:
                         for (int k = kk; k < std::min(kb, b); ++k)
                             for (int j = jj; j < std::min(jb, m); ++j) {
                                 if (!k) y[i * m + j] = 0;
-                                y[i * m + j] += u_old[i * b + k] * x[k * m + j];
+                                y[i * m + j] += u_pow[i * b + k] * x[k * m + j];
                             }
                 }
             }
