@@ -150,87 +150,80 @@ int main(int argc, char **argv) {
     double diff = 100;
     int counter = 0;
 
-    if (rank == ROOT) {
-        std::printf("Original Centroids:(%f, %f)\n", y[2], y[3]);
-    } else {
-        std::printf("Rank: %d, Scattered Centroids: (%f, %f)\n", rank, fcm.y[2], fcm.y[3]);
-    }
+//    MPI_Barrier(MPI_COMM_WORLD);
+//    fcm.distances(block);
+//    fcm.weights(block);
+//    MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//    fcm.umulx(block);
+//    MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//    std::cout.flush();
+//    if (rank == ROOT)
+//        for (int i = 0; i < c; ++i)
+//            for (int j = 0; j < m; ++j)
+//                std::printf("%.8f\t", y[i * m + j]);
+//            std::cout << std::endl;
 
-    fcm.distances(block);
-    fcm.weights(block);
-    std::cout.flush();
-//    std::printf("\nDistance of the first point: %f, %f", fcm.u_new[0], fcm.u_new[1]);
-    fcm.check(block);
-    fcm.umulx(block);
-
-
-    fcm.umulx(16);
-    err = MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        if (err != MPI_SUCCESS) {
-            std::printf("Error while reducing the centroids: %d", err);
-            MPI_Abort(MPI_COMM_WORLD, err);
-            exit(err);
-        }
-    std::printf("Error: %.8f", fcm.err);
-
-
-//    do {
-//        fcm.distances(block);
-//        fcm.weights(block);
-//        fcm.check(block);
-//
-//        // Find the maximum error among all of the processes
-//        err = MPI_Allreduce(&fcm.err, &diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-//        if (err != MPI_SUCCESS){
-//            std::printf("Error while reducing the error: %d", err);
-//            MPI_Abort(MPI_COMM_WORLD, err);
-//            exit(err);
-//        }
-//        fcm.umulx(block);
-//
-//        // Reduce the centroids
-//        err = MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+//    err = MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 //        if (err != MPI_SUCCESS) {
 //            std::printf("Error while reducing the centroids: %d", err);
 //            MPI_Abort(MPI_COMM_WORLD, err);
 //            exit(err);
 //        }
-////        std::printf("Error: %.8f", fcm.err);
-//
-//        // Reduce the sum of u
-//        err = MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-//        if (err != MPI_SUCCESS) {
-//            std::printf("Error while reducing the sums of u: %d", err);
-//            MPI_Abort(MPI_COMM_WORLD, err);
-//            exit(err);
-//        }
-//
-//        // Calculate the updated centroids and copy them back into
-////#pragma omp parallel for num_threads(c)
-//        for (int i = 0; i < c; ++i) {
-//            for (int j = 0; j < m; ++j) {
-//                y[i * m + j] /= usum[i];
-//            }
-//        }
-//        std::memcpy(fcm.y, y, c * m * sizeof(double));
-//        counter++;
-//    } while (diff > e & counter < 10000);
+//    std::printf("Error: %.8f", fcm.err);
+
+    do {
+        fcm.distances(block);
+        fcm.weights(block);
+        fcm.check(block);
+
+        // Find the maximum error among all of the processes
+        err = MPI_Allreduce(&fcm.err, &diff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+        if (err != MPI_SUCCESS){
+            std::printf("Error while reducing the error: %d", err);
+            MPI_Abort(MPI_COMM_WORLD, err);
+            exit(err);
+        }
+        fcm.umulx(block);
+
+        // Reduce the centroids
+        err = MPI_Allreduce(fcm.y, y, c * m, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        if (err != MPI_SUCCESS) {
+            std::printf("Error while reducing the centroids: %d", err);
+            MPI_Abort(MPI_COMM_WORLD, err);
+            exit(err);
+        }
+
+        // Reduce the sum of u
+        err = MPI_Allreduce(fcm.u_sum, usum, c, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        if (err != MPI_SUCCESS) {
+            std::printf("Error while reducing the sums of u: %d", err);
+            MPI_Abort(MPI_COMM_WORLD, err);
+            exit(err);
+        }
+
+        // Calculate the updated centroids and copy them back into the
+#pragma omp parallel for num_threads(c)
+        for (int i = 0; i < c; ++i) {
+            for (int j = 0; j < m; ++j) {
+                y[i * m + j] /= usum[i];
+            }
+        }
+        std::memcpy(fcm.y, y, c * m * sizeof(double));
+        counter++;
+    } while (diff > e & counter < 1000);
 
     if (rank == ROOT) {
         std::cout.flush();
         std::cout << std::endl << "================= R E S U L T S ====================" << std::endl;
         for (int i = 0; i < c; ++i) {
             for (int k = 0; k < m; ++k) {
-                if(k % m == 0) {
-                    std::cout.flush();
-                    std::printf("%.8f\n", fcm.y[i * m + k]);
-                } else {
-                    std::cout.flush();
-                    std::printf("%.8f, ", fcm.y[i * m + k]);
-                }
+                std::cout.flush();
+                std::printf("%.8f, ", fcm.y[i * m + k]);
             }
+            std::cout << std::endl;
         }
     }
+
 
     // Cleanup;
     if (rank == ROOT)

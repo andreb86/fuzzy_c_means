@@ -15,10 +15,10 @@
 
 class CMeans {
 public:
-    const int b, c, m; // number of datapoints, number of centroids and space dimension
-    int nthreads = omp_get_num_threads(); // number of threads
+    const int b, c, m, nthreads=2; // number of datapoints, number of centroids, space dimension and number of threads
+//    int nthreads = omp_get_num_threads(); // number of threads
     const double f, tol; // fuzzification parameter and tolerance
-    double err; //
+    double err;
 
     // points, centroids coordinates, distances and the membership vector
     double *x, *y, *d, *d_sum, *u_old, *u_new, *u_pow, *u_sum;
@@ -72,7 +72,10 @@ public:
                         tmp[k] = std::pow(x[i * m + k] - y[j * m + k], 2);
                     for (int kk = 0; kk < m; ++kk)
                         tmp_d += tmp[kk];
-                    d[i * c + j] = std::pow(tmp_d, 1 / (1 - f));
+                    if (tmp_d == 0)
+                        d[i * c + j] = 0;
+                    else
+                        d[i * c + j] = std::pow(tmp_d, 1 / (1 - f));
                     d_sum[i] += d[i * c + j];
                 }
             }
@@ -89,7 +92,10 @@ public:
                 tmp = 0;
                 for (int i = ii; i < std::min(ib, b); ++i) {
                     u_new[j * b + i] = d[i * c + j] / d_sum[i];
-                    u_pow[j * b + i] = std::pow(u_new[j * b + i], f);
+                    if (u_new[j * b + i] == 0)
+                        u_pow[j * b + i] = 0;
+                    else
+                        u_pow[j * b + i] = std::pow(u_new[j * b + i], f);
                     tmp += u_pow[j * b + i];
                 }
                 u_sum[j] = tmp;
@@ -114,9 +120,6 @@ public:
         if (err > tol) {
             // Swap the old and new values of the membership vectors
             std::swap(u_old, u_new);
-//            double *tmp_p = u_new;
-//            u_old = u_new;
-//            u_new = tmp_p;
         }
     }
 

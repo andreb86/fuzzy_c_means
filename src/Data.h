@@ -42,6 +42,7 @@ public:
                     if (ndat == 0)
                         ndim++;
                     x.push_back(tmp);
+//                    x.push_back(tmp / 100000);
                 }
                 ndat++;
             }
@@ -63,7 +64,7 @@ public:
         std::printf("Selecting %d random centroids from list:", n);
         for (int i = 0; i < n; ++i) {
             int k = dist(eng);
-            std::printf("%d: ", k);
+            std::printf("\n%d: ", k);
             for (int j = 0; j < ndim; ++j) {
                 std::printf("%.8f\t", x[k * ndim + j]);
                 y.push_back(x[k * ndim + j]);
